@@ -1,4 +1,11 @@
+#!/usr/bin/env Rscript
+# Author: Ryan Zhao
+# Date: 2021-01-28
+# Purpose: plot chr / gene specific CNV plots from freec results, generate 
+#          excel table at same time.
+
 library(getopt)
+library(openxlsx)
 suppressMessages(library(dplyr))
 chr <- c(1:22, "X", "Y")
 chrs = paste("chr", chr, sep = "")
@@ -24,6 +31,8 @@ opt = getopt(opt_spec, commandArgs(TRUE))
 # opt$chr <- "chr8"
 # opt$cytoBand <- "~/pt011/data/ucsc/human/cytoBand.txt.gz"
 # opt$gene <- "FGFR1"
+# test command
+# for g in `cat genes.txt`;do for s in `ls freec3`;do echo $s;Rscript plot_chr8.R -i freec3/$s -o chr8_plots -b ~/pt011/data/bed/SureSelect_Human_All_Exon_V6_r2_hs_hg38/S07604514_Covered.bed -r -g $g -y ~/pt011/data/ucsc/human/cytoBand.txt.gz;done;done
 
 if (!is.null(opt$help)){
   cat(getopt(opt_spec, usage=TRUE))
@@ -58,92 +67,10 @@ if (!is.null(opt$chr) && opt$chr %in% chrs) {
 }
 lim <- sum(bed$end - bed$start)
 
+# create workbook
+wb <- createWorkbook(creator = "Ryan", title = "CNV results")
 
 dir.create(opt$output, showWarnings = F, recursive = T)
-if(is.null(opt$BAFGraph) == F){
-  baflist <- list.files(path = opt$input, pattern = "BAF.txt$")
-  for(v in 1:length(baflist)){
-    cat(paste(baflist[v], "\n"))
-    patient <- unlist(strsplit(baflist[v], split = "_BAF"))[1]
-    baf <- read.delim(paste(opt$input, baflist[v], sep = "/"), header = T, stringsAsFactors = F)
-    
-    bed_new <-  NULL
-    baf_new <-  NULL
-
-    # filter baf to bed region
-    baf_chr <- baf %>% mutate(Chromosome = paste0("chr", Chromosome)) %>%
-      filter(Chromosome == bed$chrom[1],
-             Position > bed$start[1],
-             Position <= max(bed$end))
-    bed_chr <- bed
-
-    # re-cal start_norm end_norm in x axis
-    for(j in 1:nrow(bed_chr)){
-      bed_chr$end_norm[j] <- sum(bed_chr$end[1:j] - bed_chr$start[1:j])
-      bed_chr$start_norm[j] <- bed_chr$end_norm[j] - (bed_chr$end[j] - bed_chr$start[j])
-    }
-
-    for(j in 1:nrow(baf_chr)){
-      n <- which(bed_chr$start < baf_chr$Position[j] & bed_chr$end >= baf_chr$Position[j])
-      baf_chr$pos_norm[j] <- baf_chr$Position[j] - bed_chr$start[n] + bed_chr$start_norm[n]
-    }
-    
-    bed_new <- bed_chr
-
-    baf_new <- baf_chr
-
-    # tiff(filename = paste(opt$output, "/", gsub("txt", "tiff", baflist[v]), sep = ""),
-    #      width = 1500, height = 400,
-    #      units = "px", pointsize = 14, bg = "white", res = NA)
-    title <- paste(patient, xlabel, sep = " - ")
-    tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_BAF.tiff"),
-         width = 3000, height = 800,
-         units = "px", pointsize = 10, bg = "white", res = 300)
-    # par(mar = c(5,5.5,4,2))
-    par(mar = c(2,5,2,1))
-    plot(baf_new$pos_norm,baf_new$BAF, xlim = c(0,lim), ylim = c(-0.1,1.1),
-         xlab = xlabel, cex.main = 1.1, cex.axis = 1, cex.lab = 1.2, las = 1,
-         ylab = "BAF", main = paste(patient, xlabel, sep = " - "),
-         pch = ".", col = colors()[1], xaxs="i", xaxt = "n")
-    # 将BAF 0.5的位点用橙色标记
-    tt <- which(baf_new$A == 0.5)		
-    points(baf_new$pos_norm[tt], baf_new$BAF[tt], pch = 20, cex = 0.6, col = "darkorange2")
-    tt <- which(baf_new$A != 0.5 & baf_new$A >= 0)
-    points(baf_new$pos_norm[tt], baf_new$BAF[tt], pch = 20, cex = 0.6, col = "royalblue2")
-    tt <- 1
-    pres <- 1
-    
-    if (length(baf_new$A) > 4) {
-      for (j in c(2:(length(baf_new$A) - pres - 1))) {
-        if (baf_new$A[j] == baf_new$A[j+pres]) {	
-          tt[length(tt)+1] <- j 
-        }
-      }
-      tt <- intersect(tt, which((baf_new$A == 0.5 | baf_new$A == 1 | baf_new$A == 0) & baf_new$A >= 0))
-      points(baf_new$pos_norm[tt], baf_new$A[tt], pch = ".", col = "black", cex=3)
-      points(baf_new$pos_norm[tt], baf_new$B[tt], pch = ".", col = "black", cex=3)	
-    }
-    if (length(baf_new$A) > 4) {
-      for (j in c(2:(length(baf_new$A) - pres - 1))) {
-        if (baf_new$A[j] == baf_new$A[j+pres]) {	
-          tt[length(tt)+1] <- j 
-        }
-      }
-      tt <- intersect(tt, which(baf_new$A != 0.5 & baf_new$A != 0 & baf_new$A != 1 & baf_new$A >= 0))
-      points(baf_new$pos_norm[tt], baf_new$A[tt], pch = 20, col = "magenta3", cex=0.4)
-      points(baf_new$pos_norm[tt], baf_new$B[tt], pch = 20, col = "magenta3", cex=0.4)	
-    }
-    
-    if (!is.null(cyto)) {
-      p_pos <- max(cyto$chromEnd[cyto$arm == 'p'])
-      centromere <- bed_new %>% filter(start >= p_pos, lag(end) < p_pos) %>% pull(start_norm)
-      abline(v = centromere, col = "darkorchid", lwd = 2, lty = 2)
-    }
-    
-    dev.off()
-  }
-}
-
 
 if(is.null(opt$ratioGraph) == F){
   ratiolist <- list.files(path = opt$input, pattern = "ratio.txt$")
@@ -273,3 +200,90 @@ if(is.null(opt$ratioGraph) == F){
     dev.off()
   }
 }
+
+if(is.null(opt$BAFGraph) == F){
+  baflist <- list.files(path = opt$input, pattern = "BAF.txt$")
+  for(v in 1:length(baflist)){
+    cat(paste(baflist[v], "\n"))
+    patient <- unlist(strsplit(baflist[v], split = "_BAF"))[1]
+    baf <- read.delim(paste(opt$input, baflist[v], sep = "/"), header = T, stringsAsFactors = F)
+    
+    bed_new <-  NULL
+    baf_new <-  NULL
+    
+    # filter baf to bed region
+    baf_chr <- baf %>% mutate(Chromosome = paste0("chr", Chromosome)) %>%
+      filter(Chromosome == bed$chrom[1],
+             Position > bed$start[1],
+             Position <= max(bed$end))
+    bed_chr <- bed
+    
+    title <- paste(patient, xlabel, sep = " - ")
+    addWorksheet(wb, sheetName = paste(title, "BAF"), tabColour = "seashell")
+    writeDataTable(wb, sheetName = paste(title, "BAF"), baf_chr, withFilter = F)
+    
+    # re-cal start_norm end_norm in x axis
+    for(j in 1:nrow(bed_chr)){
+      bed_chr$end_norm[j] <- sum(bed_chr$end[1:j] - bed_chr$start[1:j])
+      bed_chr$start_norm[j] <- bed_chr$end_norm[j] - (bed_chr$end[j] - bed_chr$start[j])
+    }
+    
+    for(j in 1:nrow(baf_chr)){
+      n <- which(bed_chr$start < baf_chr$Position[j] & bed_chr$end >= baf_chr$Position[j])
+      baf_chr$pos_norm[j] <- baf_chr$Position[j] - bed_chr$start[n] + bed_chr$start_norm[n]
+    }
+    
+    bed_new <- bed_chr
+    baf_new <- baf_chr
+    
+    # tiff(filename = paste(opt$output, "/", gsub("txt", "tiff", baflist[v]), sep = ""),
+    #      width = 1500, height = 400,
+    #      units = "px", pointsize = 14, bg = "white", res = NA)
+    tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_BAF.tiff"),
+         width = 3000, height = 800,
+         units = "px", pointsize = 10, bg = "white", res = 300)
+    # par(mar = c(5,5.5,4,2))
+    par(mar = c(2,5,2,1))
+    plot(baf_new$pos_norm,baf_new$BAF, xlim = c(0,lim), ylim = c(-0.1,1.1),
+         xlab = xlabel, cex.main = 1.1, cex.axis = 1, cex.lab = 1.2, las = 1,
+         ylab = "BAF", main = paste(patient, xlabel, sep = " - "),
+         pch = ".", col = colors()[1], xaxs="i", xaxt = "n")
+    # 将BAF 0.5的位点用橙色标记
+    tt <- which(baf_new$A == 0.5)		
+    points(baf_new$pos_norm[tt], baf_new$BAF[tt], pch = 20, cex = 0.6, col = "darkorange2")
+    tt <- which(baf_new$A != 0.5 & baf_new$A >= 0)
+    points(baf_new$pos_norm[tt], baf_new$BAF[tt], pch = 20, cex = 0.6, col = "royalblue2")
+    tt <- 1
+    pres <- 1
+    
+    if (length(baf_new$A) > 4) {
+      for (j in c(2:(length(baf_new$A) - pres - 1))) {
+        if (baf_new$A[j] == baf_new$A[j+pres]) {	
+          tt[length(tt)+1] <- j 
+        }
+      }
+      tt <- intersect(tt, which((baf_new$A == 0.5 | baf_new$A == 1 | baf_new$A == 0) & baf_new$A >= 0))
+      points(baf_new$pos_norm[tt], baf_new$A[tt], pch = ".", col = "black", cex=3)
+      points(baf_new$pos_norm[tt], baf_new$B[tt], pch = ".", col = "black", cex=3)	
+    }
+    if (length(baf_new$A) > 4) {
+      for (j in c(2:(length(baf_new$A) - pres - 1))) {
+        if (baf_new$A[j] == baf_new$A[j+pres]) {	
+          tt[length(tt)+1] <- j 
+        }
+      }
+      tt <- intersect(tt, which(baf_new$A != 0.5 & baf_new$A != 0 & baf_new$A != 1 & baf_new$A >= 0))
+      points(baf_new$pos_norm[tt], baf_new$A[tt], pch = 20, col = "magenta3", cex=0.4)
+      points(baf_new$pos_norm[tt], baf_new$B[tt], pch = 20, col = "magenta3", cex=0.4)	
+    }
+    
+    if (!is.null(cyto)) {
+      p_pos <- max(cyto$chromEnd[cyto$arm == 'p'])
+      centromere <- bed_new %>% filter(start >= p_pos, lag(end) < p_pos) %>% pull(start_norm)
+      abline(v = centromere, col = "darkorchid", lwd = 2, lty = 2)
+    }
+    
+    dev.off()
+  }
+}
+
