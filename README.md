@@ -1,7 +1,7 @@
 # FREEC-Plot - Fork
 Plotting outputs of Control-FREEC for targeting sequencing data in specific chromosome or gene
 
-    Example: Rscript plot.R -i inputfolder -o outputfolder -b bedfile -r -f
+    Example: Rscript plot_chr8.R -i inputfolder -o outputfolder -b bedfile -r -f
     Usage: plot_chr8.R [-[-help|h]] [-[-input|i] <character>] [-[-ratioGraph|r]] [-[-BAFGraph|f]] [-[-output|o] <character>] [-[-gene|g] <character>] [-[-chr|c] <character>] [-[-bed|b] <character>]
     -h|--help          help manual
     -i|--input         filepath for *.BAF.txt
@@ -10,6 +10,7 @@ Plotting outputs of Control-FREEC for targeting sequencing data in specific chro
     -o|--output        filepath for output figures
     -g|--gene          gene/transcript symbol for output figures
     -c|--chr           chrmosome for output figures
+    -y|--cytoBand      UCSC cytoBand for output figures
     -b|--bed           panel bed file
 
 # Instructions
