@@ -44,6 +44,8 @@ header <- readLines(opt$bed, n = 10)
 nskip <- sum(grepl("^track|^browser|^#", header, ignore.case = T))
 bed <- read.delim(opt$bed,  header = F, stringsAsFactors = F, skip = nskip)
 colnames(bed) <- c("chrom", "start", "end", "gene")
+bed <- bed %>% mutate(gene = sub("\\w+\\|(\\w+).*", "\\1", gene),
+                      pos = paste0(chrom,":", start,"-",end))
 
 cyto <- NULL
 
@@ -58,7 +60,7 @@ if (!is.null(opt$chr) && opt$chr %in% chrs) {
   }
   xlabel <- opt$chr
 } else if (!is.null(opt$gene)) {
-  bed <- bed %>% filter(grepl(paste0("ref\\|", opt$gene, ","), gene))
+  bed <- bed %>% filter(gene == opt$gene)
   xlabel <- opt$gene
   # stop if one gene found in multiple chroms
   stopifnot(length(unique(bed$chrom)) == 1)
@@ -79,19 +81,22 @@ if(is.null(opt$ratioGraph) == F){
     cat(paste(ratiolist[v], "\n"))
     patient <- unlist(strsplit(ratiolist[v], split = "_"))[1]
     ratio <- read.delim(paste(opt$input, ratiolist[v], sep = "/"), header = T, stringsAsFactors = F)
-    ratio$Ratio[which(ratio$Ratio <= 0.01)] <- 0.01
     ratio$End <- as.integer(unlist(strsplit(ratio$Gene, split = "-"))[seq(2, nrow(ratio)*2, 2)])
     ratio$Start <- ratio$Start - 1
+    ratio <- ratio %>% relocate(End, .after = Start)
     cnv <- read.delim(paste(opt$input, cnvlist[v], sep = "/"), header = F, stringsAsFactors = F)
-    colnames(cnv)[1:4] <- c("Chromosome", "Start", "End", "CopyNumber")
-    cnv$CopyNumber[which(cnv$CopyNumber <= 0.01)] <- 0.01
-    
+    colnames(cnv) <- c("Chromosome", "Start", "End", "CopyNumber", "Type", "Genotype", "Uncertainty")
+
     bed_new <-  NULL
     ratio_new <-  NULL
     cnv_new <-  NULL
     
+    gene_symbol <- bed$gene
+    names(gene_symbol) <- bed$pos
+    
     bed_chr <- bed
-    ratio_chr <- ratio %>% mutate(Chromosome = paste0("chr", Chromosome)) %>%
+    ratio_chr <- ratio %>% mutate(Chromosome = paste0("chr", Chromosome),
+                                  Gene = gene_symbol[paste0("chr", Gene)]) %>%
       filter(Chromosome == bed$chrom[1],
              Start > bed$start[1],
              Start <= max(bed$end))
@@ -100,6 +105,18 @@ if(is.null(opt$ratioGraph) == F){
              Start >= bed$start[1],
              End <= max(bed$end))
 
+    ratio_chr$Ratio[which(ratio_chr$Ratio <= 0.01)] <- 0.01
+    cnv_chr$CopyNumber[which(cnv_chr$CopyNumber <= 0.01)] <- 0.01
+    title <- paste(patient, xlabel, sep = " - ")
+    addWorksheet(wb, sheetName = paste(title, "Ratio"), tabColour = "papayawhip")
+    writeDataTable(wb, sheet = paste(title, "Ratio"), ratio_chr, withFilter = F)
+    setColWidths(wb, sheet = paste(title, "Ratio"), cols = 1:ncol(ratio_chr), widths = "auto")
+    if (nrow(cnv_chr) > 0) {
+      addWorksheet(wb, sheetName = paste(title, "CNVs"), tabColour = "thistle")
+      writeDataTable(wb, sheet = paste(title, "CNVs"), cnv_chr, withFilter = F)
+      setColWidths(wb, sheet = paste(title, "CNVs"), cols = 1:ncol(cnv_chr), widths = "auto")
+    }
+    
     for(j in 1:nrow(bed_chr)){
       bed_chr$end_norm[j] <- sum(bed_chr$end[1:j] - bed_chr$start[1:j])
       bed_chr$start_norm[j] <- bed_chr$end_norm[j] - (bed_chr$end[j] - bed_chr$start[j])
@@ -120,7 +137,6 @@ if(is.null(opt$ratioGraph) == F){
     ratio_new <- ratio_chr
     cnv_new <- cnv_chr
 
-    title <- paste(patient, xlabel, sep = " - ")
     tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_ratio.tiff"),
          width = 3000, height = 800,
          units = "px", pointsize = 10, bg = "white", res = 300)
@@ -220,7 +236,8 @@ if(is.null(opt$BAFGraph) == F){
     
     title <- paste(patient, xlabel, sep = " - ")
     addWorksheet(wb, sheetName = paste(title, "BAF"), tabColour = "seashell")
-    writeDataTable(wb, sheetName = paste(title, "BAF"), baf_chr, withFilter = F)
+    writeDataTable(wb, sheet = paste(title, "BAF"), baf_chr, withFilter = F)
+    setColWidths(wb, sheet = paste(title, "BAF"), cols = 1:ncol(baf_chr), widths = "auto")
     
     # re-cal start_norm end_norm in x axis
     for(j in 1:nrow(bed_chr)){
@@ -287,3 +304,4 @@ if(is.null(opt$BAFGraph) == F){
   }
 }
 
+saveWorkbook(wb, file = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), ".xlsx"), overwrite = T)
