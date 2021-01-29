@@ -20,3 +20,6 @@ Plotting outputs of Control-FREEC for targeting sequencing data in specific chro
 * mark CopyNumber > 2 log2 ratio in firebrick3 color
 * mark CopyNumber < 2 log2 ratio in mediumblue color
 * mark CopyNumber = 2 log2 ratio in green
+
+# Merge output Excels using merge_excel_by_sheet_name.R
+* multi-sample outputs could be merged into one table
