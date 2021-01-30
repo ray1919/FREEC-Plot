@@ -6,6 +6,8 @@
 
 library(getopt)
 library(openxlsx)
+library(scales)
+
 suppressMessages(library(dplyr))
 chr <- c(1:22, "X", "Y")
 chrs = paste("chr", chr, sep = "")
@@ -94,6 +96,7 @@ if(is.null(opt$ratioGraph) == F){
     gene_symbol <- bed$gene
     names(gene_symbol) <- bed$pos
     
+    cyto_chr <- cyto
     bed_chr <- bed
     ratio_chr <- ratio %>% mutate(Chromosome = paste0("chr", Chromosome),
                                   Gene = gene_symbol[paste0("chr", Gene)]) %>%
@@ -133,6 +136,16 @@ if(is.null(opt$ratioGraph) == F){
       n <- which(bed_chr$start <= cnv_chr$End[j] & bed_chr$end >= cnv_chr$End[j])
       cnv_chr$end_norm[j] <- cnv_chr$End[j] - bed_chr$start[n] + bed_chr$start_norm[n]
     }
+    if (!is.null(cyto)) {
+      cyto_chr$stainPoint <- NULL
+      for (k in 1:(nrow(cyto_chr)-1)) {
+        cyto_chr$stainPoint[k] <- bed_chr %>%
+          filter(start < cyto_chr$chromEnd[k],
+                 end >= cyto_chr$chromEnd[k] | lead(start >= cyto_chr$chromEnd[k])) %>%
+          pull(end_norm)
+      }
+      cyto_chr$stainPoint[nrow(cyto_chr)] <- bed_chr$end_norm[nrow(bed_chr)]
+    }
     bed_new <- bed_chr
     ratio_new <- ratio_chr
     cnv_new <- cnv_chr
@@ -141,8 +154,10 @@ if(is.null(opt$ratioGraph) == F){
          width = 3000, height = 800,
          units = "px", pointsize = 10, bg = "white", res = 300)
     par(mar = c(2,5,2,1))
+    ymax <- max(log2(max(ratio_new$Ratio)),2)
+    ymin <- min(log2(min(ratio_new$Ratio)),-2)
     plot(ratio_new$start_norm,ratio_new$Ratio,
-         ylim = c(min(log2(min(ratio_new$Ratio)),-2), max(log2(max(ratio_new$Ratio)),2)),
+         ylim = c(ymin, ymax),
          xlim = c(0,lim),
          ylab = "Log2 Copy Number",
          xlab = xlabel, cex.main = 1.5, xaxs="i", 
@@ -211,6 +226,12 @@ if(is.null(opt$ratioGraph) == F){
       p_pos <- max(cyto$chromEnd[cyto$arm == 'p'])
       centromere <- bed_new %>% filter(start >= p_pos, lag(end) < p_pos) %>% pull(start_norm)
       abline(v = centromere, col = "darkorchid", lwd = 2, lty = 2)
+      segments(x0 = cyto_chr$stainPoint, y0 = ymin + 0.035 * (ymax - ymin),
+               x1 = cyto_chr$stainPoint, y1 = ymin,
+               col = alpha("darkorchid", 0.4), lty = 1 )
+      # text(x = cyto_chr$stainPoint,
+      #      y = rep(c(ymax,ymax - 0.5, ymax-1), length.out = nrow(cyto_chr)),
+      #      labels = cyto_chr$name)
     }
     
     dev.off()
@@ -233,6 +254,7 @@ if(is.null(opt$BAFGraph) == F){
              Position > bed$start[1],
              Position <= max(bed$end))
     bed_chr <- bed
+    cyto_chr <- cyto
     
     title <- paste(patient, xlabel, sep = " - ")
     addWorksheet(wb, sheetName = paste(title, "BAF"), tabColour = "seashell")
@@ -248,6 +270,17 @@ if(is.null(opt$BAFGraph) == F){
     for(j in 1:nrow(baf_chr)){
       n <- which(bed_chr$start < baf_chr$Position[j] & bed_chr$end >= baf_chr$Position[j])
       baf_chr$pos_norm[j] <- baf_chr$Position[j] - bed_chr$start[n] + bed_chr$start_norm[n]
+    }
+    
+    if (!is.null(cyto)) {
+      cyto_chr$stainPoint <- NULL
+      for (k in 1:(nrow(cyto_chr)-1)) {
+        cyto_chr$stainPoint[k] <- bed_chr %>%
+          filter(start < cyto_chr$chromEnd[k],
+                 end >= cyto_chr$chromEnd[k] | lead(start >= cyto_chr$chromEnd[k])) %>%
+          pull(end_norm)
+      }
+      cyto_chr$stainPoint[nrow(cyto_chr)] <- bed_chr$end_norm[nrow(bed_chr)]
     }
     
     bed_new <- bed_chr
@@ -298,6 +331,9 @@ if(is.null(opt$BAFGraph) == F){
       p_pos <- max(cyto$chromEnd[cyto$arm == 'p'])
       centromere <- bed_new %>% filter(start >= p_pos, lag(end) < p_pos) %>% pull(start_norm)
       abline(v = centromere, col = "darkorchid", lwd = 2, lty = 2)
+      segments(x0 = cyto_chr$stainPoint, y0 = -0.06,
+               x1 = cyto_chr$stainPoint, y1 = -0.1,
+               col = alpha("darkorchid", 0.4), lty = 1 )
     }
     
     dev.off()
