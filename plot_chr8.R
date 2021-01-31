@@ -108,8 +108,6 @@ if(is.null(opt$ratioGraph) == F){
              Start >= bed$start[1],
              End <= max(bed$end))
 
-    ratio_chr$Ratio[which(ratio_chr$Ratio <= 0.01)] <- 0.01
-    cnv_chr$CopyNumber[which(cnv_chr$CopyNumber <= 0.01)] <- 0.01
     title <- paste(patient, xlabel, sep = " - ")
     addWorksheet(wb, sheetName = paste(title, "Ratio"), tabColour = "papayawhip")
     writeDataTable(wb, sheet = paste(title, "Ratio"), ratio_chr, withFilter = F)
@@ -120,6 +118,8 @@ if(is.null(opt$ratioGraph) == F){
       setColWidths(wb, sheet = paste(title, "CNVs"), cols = 1:ncol(cnv_chr), widths = "auto")
     }
     
+    ratio_chr$Ratio[which(ratio_chr$Ratio <= 0.01)] <- 0.01
+    cnv_chr$CopyNumber[which(cnv_chr$CopyNumber <= 0.01)] <- 0.01
     for(j in 1:nrow(bed_chr)){
       bed_chr$end_norm[j] <- sum(bed_chr$end[1:j] - bed_chr$start[1:j])
       bed_chr$start_norm[j] <- bed_chr$end_norm[j] - (bed_chr$end[j] - bed_chr$start[j])
