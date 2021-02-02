@@ -13,6 +13,7 @@ chr <- c(1:22, "X", "Y")
 chrs = paste("chr", chr, sep = "")
 opt_spec <- matrix(c('help', 'h', 0, 'logical', 'help manual',
                      'input', 'i', 1, 'character', 'filepath for *.BAF.txt',
+                     'format', 'e', 1, 'character', 'image format "png" or "tiff"(default)',
                      'ratioGraph', 'r', 0, 'logical', 'if RatioGraph should be drawn',
                      'BAFGraph', 'f', 0, 'logical', 'if BAFGraph should be drawn',
                      'output', 'o', 1, 'character', 'filepath for output figures',
@@ -41,6 +42,11 @@ if (!is.null(opt$help)){
   q(save='no', status=1)
 }
 stopifnot(file.exists(opt$input, opt$bed))
+
+ext = 'tiff'
+if (!is.null(opt$format) && tolower(opt$format) == 'png') {
+  ext = 'png'
+}
 
 header <- readLines(opt$bed, n = 10)
 nskip <- sum(grepl("^track|^browser|^#", header, ignore.case = T))
@@ -150,7 +156,12 @@ if(is.null(opt$ratioGraph) == F){
     ratio_new <- ratio_chr
     cnv_new <- cnv_chr
 
-    tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_ratio.tiff"),
+    if (ext == "png")
+      png(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_ratio.png"),
+          width = 1500, height = 400,
+          units = "px", pointsize = 10, bg = "white", res = 150)
+    else
+      tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_ratio.tiff"),
          width = 3000, height = 800,
          units = "px", pointsize = 10, bg = "white", res = 300)
     par(mar = c(2,5,2,1))
@@ -286,10 +297,12 @@ if(is.null(opt$BAFGraph) == F){
     bed_new <- bed_chr
     baf_new <- baf_chr
     
-    # tiff(filename = paste(opt$output, "/", gsub("txt", "tiff", baflist[v]), sep = ""),
-    #      width = 1500, height = 400,
-    #      units = "px", pointsize = 14, bg = "white", res = NA)
-    tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_BAF.tiff"),
+    if (ext == 'png')
+      png(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_BAF.png"),
+          width = 1500, height = 400,
+          units = "px", pointsize = 10, bg = "white", res = 150)
+    else
+      tiff(filename = paste0(opt$output, "/", gsub(" - ", "_", title, xlabel), "_BAF.tiff"),
          width = 3000, height = 800,
          units = "px", pointsize = 10, bg = "white", res = 300)
     # par(mar = c(5,5.5,4,2))
